@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        Int     @id
+  username  String?
+  firstName String?
+  lastName  String?
+
+  songs Song[]
+}
+
+model Song {
+  id             Int      @id @default(autoincrement())
+  telegramFileId String
+  fileUniqueId   String   @unique
+  title          String?
+  performer      String?
+  duration       Int
+  fileName       String?
+  createdAt      DateTime @default(now())
+
+  addedById Int
+  addedBy   User @relation(fields: [addedById], references: [id])
+}

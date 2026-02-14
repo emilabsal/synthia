@@ -1,36 +1,73 @@
 // Imports
-import { Bot } from 'grammy'
 import 'dotenv/config'
-import { add } from './commands/addSong/index.js'
-import { createPlaylist } from './commands/createPlaylst/index.js'
-import {
-  conversations,
-} from "@grammyjs/conversations";
+import { Bot, InlineKeyboard, type Context } from 'grammy'
+import { conversations, createConversation } from '@grammyjs/conversations'
+import { add } from './modules/addSong/index.js'
+import { currentRound } from './modules/currentRound/index.js'
+// import { profile } from './modules/profile/index.js'
+import { constants } from './const/index.js'
+import { prisma } from '../lib/prisma.js'
+import { changeNameMenu, mainMenu, profileMenu } from './keyboards/index.js'
+import { changeName } from './modules/profile/index.js'
 
-// Initialization
+// Инициализация
 const bot = new Bot(process.env.BOT_TOKEN || '')
+
+// Функция для создания или получения пользователя
+bot.use(async (ctx, next) => {
+  if (ctx.from) {
+    const userId = ctx.from.id
+    // Проверяем, есть ли пользователь в базе
+    const userExist = await prisma.user.findUnique({
+      where: { id: userId }
+    })
+
+    if (!userExist) {
+      // Создаем пользователя только один раз
+      await prisma.user.create({
+        data: {
+          id: userId,
+          firstName: ctx.from.first_name,
+          lastName: ctx.from.last_name || null,
+          username: ctx.from.username || null
+        }
+      })
+      console.log(`Добавлен пользователь: ${ctx.from.first_name}`)
+    }
+  }
+
+  // Продолжаем выполнение остальных middleware/хэндлеров
+  await next()
+})
+
+// Модули
 bot.use(conversations() as any)
-bot.use(add as any)
-bot.use(createPlaylist as any)
+// bot.use(add as any)
+bot.use(currentRound as any)
+// bot.use(profile as any)
+bot.use(createConversation(changeName) as any)
+bot.use(profileMenu)
+bot.use(mainMenu)
+// bot.use(changeNameMenu)
 
-// Menu
-await bot.api.setMyCommands([
-  { command: 'add_song', description: 'Добавить песню' },
-  { command: 'create_playlist', description: 'Создать плейлист' },
-  { command: 'statistics', description: 'Статистика' },
-  { command: 'settings', description: 'Настройки' }
-])
+// Меню
+await bot.api.setMyCommands([{ command: 'start', description: 'Начать' }])
 
-// bot.on('message:text', ctx => ctx.react('👀'))
+// Старт
+bot.command('start', async (ctx) => {
+  await ctx.deleteMessage().catch(() => {})
+  ctx.reply(constants.greeting, {
+    reply_markup: mainMenu
+  })
+})
 
-// Handle other messages
-bot.on('message', (ctx) => ctx.reply(`
-Извини, я тебя не понимаю или возникла ошибка 
-В любом случае напиши [@Emil313](@Emil313)
-`, { parse_mode: 'MarkdownV2' }))
+// Обработка ошибок
+// bot.on('message', (ctx) =>
+//   ctx.reply('Извини, я тебя не понимаю или возникла ошибка')
+// )
 
+// Логирование ошибок
+bot.catch((err) => console.error(err))
 
-bot.catch(err => console.error(err))
-
-// Start
+// Запуск бота
 bot.start()
